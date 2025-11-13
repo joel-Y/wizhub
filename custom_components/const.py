@@ -1,6 +1,6 @@
 """Constants for the WizSmith Home Integration."""
 
-DOMAIN = "wizsmith-home-assistant"
+DOMAIN = "wizsmith_home_assistant"
 
 # Default values
 DEFAULT_SYNC_INTERVAL = 30

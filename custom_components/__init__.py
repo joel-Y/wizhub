@@ -9,9 +9,9 @@ import uuid
 from typing import Any, Dict, Optional
 
 import aiohttp
-import paho.mqtt.client as mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.components import mqtt as ha_mqtt
 
 from .const import *
 
@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     github_repo = cfg.get(CONF_GITHUB_REPO, DEFAULT_GITHUB_REPO)
 
     # persistent pi_id
-    pi_id_path = "/config/wizsmith_home_integration_pi_id"
+    pi_id_path = "/config/wizsmith_home_assistant_pi_id"
     if "pi_id" in hass.data:
         pi_id = hass.data["pi_id"]
     else:
@@ -72,41 +72,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.info("WizSmith integration starting for pi_id=%s", pi_id)
 
-    # Setup MQTT client
-    client = mqtt.Client(client_id=f"WizSmithHA-{pi_id}")
-    if mqtt_user and mqtt_pass:
-        client.username_pw_set(mqtt_user, mqtt_pass)
-    try:
-        client.connect(mqtt_host, mqtt_port, keepalive=60)
-        client.loop_start()
-        _LOGGER.info("Connected to MQTT broker %s:%s", mqtt_host, mqtt_port)
-    except Exception as e:
-        _LOGGER.error("Failed to connect to MQTT broker %s:%s - %s", mqtt_host, mqtt_port, e)
-        return False
+    # Store integration data
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = {
+        "cfg": cfg,
+        "pi_id": pi_id,
+    }
 
     # OpenRemote auth + ensure assets
     from .openremote_client import OpenRemoteClient
     or_client = OpenRemoteClient(hass, cfg, pi_id)
     await or_client.setup()
+    
+    hass.data[DOMAIN][entry.entry_id]["or_client"] = or_client
 
-    # Publish loop
+    # Publish loop using Home Assistant's built-in MQTT
     async def _publish_loop() -> None:
         while True:
             try:
                 from .sensor import publish_sensors
-                await publish_sensors(hass, client, or_client)
+                # Use Home Assistant's MQTT instead of paho-mqtt
+                await publish_sensors(hass, or_client)
             except Exception as e:
                 _LOGGER.exception("Error in publish loop: %s", e)
             await asyncio.sleep(sync_interval)
 
-    hass.async_create_task(_publish_loop())
+    hass.data[DOMAIN][entry.entry_id]["publish_task"] = hass.async_create_task(_publish_loop())
 
     # GitHub release checker
     async def _check_github_release():
         try:
             gh_api = f"https://api.github.com/repos/{github_repo}/releases/latest"
             async with aiohttp.ClientSession() as s:
-                async with s.get(gh_api, timeout=10) as resp:
+                async with s.get(gh_api, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status == 200:
                         r = await resp.json()
                         latest_tag = r.get("tag_name")
@@ -129,4 +127,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Unloading WizSmith Home Integration")
+    
+    # Cancel the publish loop task
+    if DOMAIN in hass.data and entry.entry_id in hass.data[DOMAIN]:
+        data = hass.data[DOMAIN].pop(entry.entry_id)
+        if "publish_task" in data:
+            data["publish_task"].cancel()
+    
     return True
