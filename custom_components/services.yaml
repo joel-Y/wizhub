@@ -1,0 +1,3 @@
+wizsmith_home_integration.publish_all:
+  description: Publish all sensors immediately
+  fields: {}

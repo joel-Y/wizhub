@@ -1,0 +1,9 @@
+{
+  "name": "WizSmith Home Integration",
+  "content_in_root": false,
+  "domains": [
+    "wizsmith_home_integration"
+  ],
+  "country": "US",
+  "homeassistant": "2024.6.0"
+}
