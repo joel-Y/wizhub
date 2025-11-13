@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "WizSmith Home Integration Setup",
+        "description": "Configure OpenRemote and MQTT settings",
+        "data": {
+          "openremote_url": "OpenRemote URL",
+          "openremote_user": "OpenRemote Username",
+          "openremote_pass": "OpenRemote Password",
+          "mqtt_host": "MQTT Host",
+          "mqtt_port": "MQTT Port",
+          "mqtt_user": "MQTT Username (optional)",
+          "mqtt_pass": "MQTT Password (optional)",
+          "sync_interval": "Sync Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "unknown": "Unknown error occurred"
+    }
+  }
+}

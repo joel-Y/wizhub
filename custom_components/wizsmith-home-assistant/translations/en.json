@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "WizSmith Home Integration Setup",
+        "description": "Configure OpenRemote and MQTT settings",
+        "data": {
+          "openremote_url": "OpenRemote URL",
+          "openremote_realm": "OpenRemote Realm",
+          "openremote_username": "OpenRemote Username",
+          "openremote_password": "OpenRemote Password",
+          "mqtt_broker": "MQTT Broker Address",
+          "mqtt_port": "MQTT Port",
+          "mqtt_username": "MQTT Username (optional)",
+          "mqtt_password": "MQTT Password (optional)",
+          "mqtt_topic_prefix": "MQTT Topic Prefix",
+          "publish_interval": "Publish Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Invalid OpenRemote URL",
+      "invalid_broker": "Invalid MQTT broker address",
+      "unknown": "Unknown error occurred"
+    },
+    "abort": {
+      "already_configured": "This integration is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "WizSmith Options",
+        "description": "Configure integration options",
+        "data": {
+          "publish_interval": "Publish Interval (seconds)"
+        }
+      }
+    }
+  }
+}
