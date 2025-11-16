@@ -1,63 +1,55 @@
-"""Sensor publisher."""
+"""WizSmith Home Integration Sensors with MQTT publishing and debugging."""
 
-import json
 import logging
-import aiohttp
+import json
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.components import mqtt
-from .const import *
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers import mqtt as hass_mqtt
 
 _LOGGER = logging.getLogger(__name__)
 
-async def publish_sensors(hass: HomeAssistant, or_client):
-    """Publish all sensor and binary_sensor states to MQTT and OpenRemote."""
-    states = hass.states.async_all()
-    batch = {}
-    
-    for s in states:
-        if s.entity_id.startswith(("sensor.", "binary_sensor.")):
-            topic = f"wizsmith/{or_client.pi_id}/{s.domain}/{s.object_id}/state"
-            payload = {
-                "entity_id": s.entity_id,
-                "state": s.state,
-                "attributes": dict(s.attributes),
-                "last_changed": str(s.last_changed),
-            }
-            
-            try:
-                # Use Home Assistant's built-in MQTT publish
-                await mqtt.async_publish(
-                    hass, 
-                    topic, 
-                    json.dumps(payload), 
-                    qos=1, 
-                    retain=False
-                )
-            except Exception as e:
-                _LOGGER.debug("MQTT publish failed for %s: %s", topic, e)
-            
-            batch[topic] = payload
+DOMAIN = "wizsmith_home_integration"
 
-    # Send batch to OpenRemote if authenticated
-    if (getattr(or_client, 'token', None) and 
-        getattr(or_client, 'child_id', None) and 
-        getattr(or_client, 'child_attr', None)):
-        try:
-            or_url = or_client.cfg.get(CONF_OR_URL, "").rstrip("/")
-            attr_url = f"{or_url}/api/master/asset/{or_client.child_id}/attribute/{or_client.child_attr}"
-            headers = {
-                "Authorization": f"Bearer {or_client.token}", 
-                "Content-Type": "application/json"
-            }
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    attr_url, 
-                    json=batch, 
-                    headers=headers, 
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    if resp.status != 200:
-                        _LOGGER.debug("OpenRemote batch post returned status %s", resp.status)
-        except Exception as e:
-            _LOGGER.debug("OpenRemote batch post failed: %s", e)
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
+    mqtt = hass.components.mqtt
+
+    devices = hass.data[DOMAIN][entry.entry_id]["devices"]
+    entities = []
+
+    for dev in devices:
+        entities.append(WizSmithStateSensor(hass, mqtt, dev))
+
+    async_add_entities(entities)
+
+
+class WizSmithStateSensor(SensorEntity):
+    def __init__(self, hass, mqtt, device):
+        self.hass = hass
+        self._mqtt = mqtt
+        self._device = device
+        self._state = None
+        self._attr_name = f"WizSmith {device['id']} State"
+        self._attr_unique_id = f"wizsmith_{device['id']}_state"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device['id'])},
+            name=f"WizSmith Device {device['id']}",
+            manufacturer="WizSmith",
+        )
+
+    @property
+    def native_value(self):
+        return self._state
+
+    async def async_update(self):
+        # Example: fetch local state
+        self._state = self._device.get("status", "unknown")
+        await self._publish_state()
+
+    async def _publish_state(self):
+        topic = f"wizsmith/{self._device['id']}/state"
+        payload = json.dumps({"state": self._state})
+
+        _LOGGER.debug("Publishing MQTT state to %s: %s", topic, payload)
+        self._mqtt.async_publish(topic, payload, qos=0, retain=False)
